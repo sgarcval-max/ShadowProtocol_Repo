@@ -13,8 +13,15 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float velocidadRotacion = 10f;
     [SerializeField] private float gravedad = -9.81f;
 
+    [Header("Animator")]
+    // CAMBIA estos nombres por los de la pestaña Parameters de tu Animator Controller
+    [SerializeField] private string parametroVelocidad = "Speed";
+    [SerializeField] private string parametroAgachado = "IsCrouching";
+    // Si tu Animator NO tiene este parámetro, deja el campo vacío en el Inspector
+    [SerializeField] private string parametroMotionSpeed = "MotionSpeed";
+
     [Header("Agacharse")]
-    [SerializeField] private Transform modeloVisual; // el objeto HIJO que contiene la malla (no el que tiene el CharacterController)
+    [SerializeField] private Transform modeloVisual; // el objeto HIJO que contiene la malla (no el que tiene el CharacterController). Si lo dejas vacío, no se escala nada.
     [SerializeField] private float escalaAlturaAgachado = 0.5f; // 0.5 = la mitad de alto visualmente
     [SerializeField] private float alturaOriginalModelo = 2f; // la altura (en unidades locales) del modelo de pie, para recolocar los pies en el suelo al escalar
     [SerializeField] private float velocidadTransicionAltura = 8f;
@@ -24,12 +31,14 @@ public class PlayerController : MonoBehaviour
 
     private CharacterController controller;
     private PlayerNoiseEmitter emisorRuido; // opcional: si no está el componente, simplemente no emite ruido
+    private Animator animator;
     private Vector3 velocidadVertical;
 
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
         emisorRuido = GetComponent<PlayerNoiseEmitter>();
+        animator = GetComponentInChildren<Animator>();
     }
 
     private void Update()
@@ -37,16 +46,31 @@ public class PlayerController : MonoBehaviour
         // Input horizontal (A/D) y vertical (W/S)
         float h = Input.GetAxisRaw("Horizontal");
         float v = Input.GetAxisRaw("Vertical");
+        bool seMueve = Mathf.Abs(h) > 0.1f || Mathf.Abs(v) > 0.1f;
 
         // Mantener pulsada la tecla C para agacharse; al soltarla, se levanta.
         // Usamos "C" (letra normal) en vez de Ctrl/Shift porque las teclas modificadoras
         // son las que más sufren el bug de "se queda pillada" si la ventana pierde el foco.
         EstaAgachado = Input.GetKey(KeyCode.C);
 
-        bool corriendo = !EstaAgachado && Input.GetKey(KeyCode.LeftShift) && (Mathf.Abs(h) > 0.1f || Mathf.Abs(v) > 0.1f);
+        bool corriendo = !EstaAgachado && Input.GetKey(KeyCode.LeftShift) && seMueve;
         if (emisorRuido != null) emisorRuido.EstaCorriendo = corriendo;
 
         float velocidadActual = EstaAgachado ? velocidadAgachado : (corriendo ? velocidadCorriendo : velocidad);
+
+        // Animaciones: le pasamos al Animator la velocidad real (0 si está quieto)
+        if (animator != null)
+        {
+            float velocidadAnim = seMueve ? velocidadActual : 0f;
+            animator.SetFloat(parametroVelocidad, velocidadAnim, 0.1f, Time.deltaTime); // el 0.1f suaviza la transición
+            animator.SetBool(parametroAgachado, EstaAgachado);
+
+            // Multiplicador de velocidad de la animación: a 1 el ciclo avanza normal
+            if (!string.IsNullOrEmpty(parametroMotionSpeed))
+            {
+                animator.SetFloat(parametroMotionSpeed, 1f);
+            }
+        }
 
         // Escalamos SOLO el modelo visual (no el CharacterController, que se queda siempre igual para evitar bugs de colisión).
         // El collider de colisión no cambia de tamaño; solo cambia cómo se ve el personaje y cuánto detectan los enemigos.

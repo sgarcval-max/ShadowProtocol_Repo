@@ -187,6 +187,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: KyleRobot
       objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: b1787a7070753594996dac074aee4532, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 40db3173a05ae3242b1c182a09b0a183, type: 2}
+    - target: {fileID: 5866666021909216657, guid: b1787a7070753594996dac074aee4532, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2376,6 +2384,8 @@ MonoBehaviour:
   velocidadAgachado: 2
   velocidadRotacion: 10
   gravedad: -9.81
+  parametroVelocidad: Speed
+  parametroAgachado: IsCrouching
   modeloVisual: {fileID: 744692574}
   escalaAlturaAgachado: 0.5
   alturaOriginalModelo: 2
