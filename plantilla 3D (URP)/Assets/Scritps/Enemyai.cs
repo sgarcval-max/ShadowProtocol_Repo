@@ -31,8 +31,15 @@ public class EnemyAI : MonoBehaviour
     [SerializeField] private LayerMask capaEnemigos; // qué capa usan los objetos "Enemigo" para encontrarse entre ellos
     private bool yaAviseEstaPersecucion = false; // evita spamear el aviso cada frame mientras persigue
 
+    [Header("Animator")]
+    // CAMBIA estos nombres por los de la pestaña Parameters del Animator Controller de este enemigo
+    [SerializeField] private string parametroVelocidad = "Speed";
+    // Si tu Animator NO tiene este parámetro, deja el campo vacío en el Inspector
+    [SerializeField] private string parametroMotionSpeed = "MotionSpeed";
+
     private NavMeshAgent agent;
     private EnemyFieldOfView fov;
+    private Animator animator;
 
     private int indicePuntoActual = 0;
     private float temporizadorEspera = 0f;
@@ -43,6 +50,7 @@ public class EnemyAI : MonoBehaviour
     {
         agent = GetComponent<NavMeshAgent>();
         fov = GetComponent<EnemyFieldOfView>();
+        animator = GetComponentInChildren<Animator>();
     }
 
     private void Start()
@@ -73,6 +81,23 @@ public class EnemyAI : MonoBehaviour
             case Estado.Busqueda:
                 ActualizarBusqueda();
                 break;
+        }
+
+        ActualizarAnimator();
+    }
+
+    // Le pasa al Animator la velocidad REAL a la que se está moviendo el agente (0 si está parado)
+    private void ActualizarAnimator()
+    {
+        if (animator == null) return;
+
+        float velocidadReal = agent.velocity.magnitude;
+        animator.SetFloat(parametroVelocidad, velocidadReal, 0.1f, Time.deltaTime); // el 0.1f suaviza la transición
+
+        // Multiplicador de velocidad de la animación: a 1 el ciclo avanza normal
+        if (!string.IsNullOrEmpty(parametroMotionSpeed))
+        {
+            animator.SetFloat(parametroMotionSpeed, 1f);
         }
     }
 
