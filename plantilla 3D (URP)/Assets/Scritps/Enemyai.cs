@@ -31,6 +31,10 @@ public class EnemyAI : MonoBehaviour
     [SerializeField] private LayerMask capaEnemigos; // qué capa usan los objetos "Enemigo" para encontrarse entre ellos
     private bool yaAviseEstaPersecucion = false; // evita spamear el aviso cada frame mientras persigue
 
+    [Header("Audio")]
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioClip sonidoPersecucion;
+
     [Header("Animator")]
     // CAMBIA estos nombres por los de la pestaña Parameters del Animator Controller de este enemigo
     [SerializeField] private string parametroVelocidad = "Speed";
@@ -51,6 +55,11 @@ public class EnemyAI : MonoBehaviour
         agent = GetComponent<NavMeshAgent>();
         fov = GetComponent<EnemyFieldOfView>();
         animator = GetComponentInChildren<Animator>();
+
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
     }
 
     private void Start()
@@ -128,6 +137,12 @@ public class EnemyAI : MonoBehaviour
                 {
                     AvisarACompanerosCercanos();
                     yaAviseEstaPersecucion = true;
+
+                    // Reproduce el SFX solo una vez al entrar en persecución
+                    if (audioSource != null && sonidoPersecucion != null)
+                    {
+                        audioSource.PlayOneShot(sonidoPersecucion);
+                    }
                 }
                 break;
 
@@ -135,7 +150,7 @@ public class EnemyAI : MonoBehaviour
                 agent.isStopped = false;
                 agent.speed = velocidadPatrulla;
                 agent.SetDestination(posicionDondeSeVioAlJugador);
-                yaAviseEstaPersecucion = false; // si vuelve a detectar, podrá avisar de nuevo
+                yaAviseEstaPersecucion = false; // si vuelve a detectar, podrá avisar y sonar de nuevo
                 break;
         }
     }
