@@ -1,8 +1,6 @@
 using UnityEngine;
 
 // Requiere un CharacterController en el mismo GameObject.
-// Movimiento simple con WASD, sin salto, pensado como base
-// para el prototipo de sigilo.
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
 {
@@ -21,24 +19,43 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private string parametroMotionSpeed = "MotionSpeed";
 
     [Header("Agacharse")]
-    [SerializeField] private Transform modeloVisual; // el objeto HIJO que contiene la malla (no el que tiene el CharacterController). Si lo dejas vacío, no se escala nada.
-    [SerializeField] private float escalaAlturaAgachado = 0.5f; // 0.5 = la mitad de alto visualmente
-    [SerializeField] private float alturaOriginalModelo = 2f; // la altura (en unidades locales) del modelo de pie, para recolocar los pies en el suelo al escalar
+    [SerializeField] private Transform modeloVisual; // el objeto HIJO que contiene la malla
+    [SerializeField] private float escalaAlturaAgachado = 0.5f;
+    [SerializeField] private float alturaOriginalModelo = 2f;
     [SerializeField] private float velocidadTransicionAltura = 8f;
+
+    [Header("Audio de Pasos")]
+    [SerializeField] private AudioSource audioSourcePasos;
+    [SerializeField] private AudioClip[] sonidosPasos; // Arrastra aquí tus 5 o 6 clips de audio
+    [SerializeField] private float intervaloPasosCaminar = 0.5f;   // Segundos entre pasos al caminar
+    [SerializeField] private float intervaloPasosCorrer = 0.32f;  // Segundos entre pasos al correr
+    [SerializeField] private float intervaloPasosAgachado = 0.65f;// Segundos entre pasos agachado
+    [Range(0f, 1f)]
+    [SerializeField] private float volumenPasos = 0.7f;
+    [SerializeField] private float variacionPitch = 0.1f; // Variación ligera de tono para mayor naturalidad
+
+    [Tooltip("Marca esto si vas a usar Animation Events en los FBX/Clips de animación en lugar del temporizador por código.")]
+    [SerializeField] private bool usarEventosDeAnimacion = false;
 
     // La IA (EnemyFieldOfView) lee esto para reducir su radio de detección
     public bool EstaAgachado { get; private set; }
 
     private CharacterController controller;
-    private PlayerNoiseEmitter emisorRuido; // opcional: si no está el componente, simplemente no emite ruido
+    private PlayerNoiseEmitter emisorRuido;
     private Animator animator;
     private Vector3 velocidadVertical;
+    private float temporizadorPasos = 0f;
 
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
         emisorRuido = GetComponent<PlayerNoiseEmitter>();
         animator = GetComponentInChildren<Animator>();
+
+        if (audioSourcePasos == null)
+        {
+            audioSourcePasos = GetComponent<AudioSource>();
+        }
     }
 
     private void Update()
@@ -48,9 +65,6 @@ public class PlayerController : MonoBehaviour
         float v = Input.GetAxisRaw("Vertical");
         bool seMueve = Mathf.Abs(h) > 0.1f || Mathf.Abs(v) > 0.1f;
 
-        // Mantener pulsada la tecla C para agacharse; al soltarla, se levanta.
-        // Usamos "C" (letra normal) en vez de Ctrl/Shift porque las teclas modificadoras
-        // son las que más sufren el bug de "se queda pillada" si la ventana pierde el foco.
         EstaAgachado = Input.GetKey(KeyCode.C);
 
         bool corriendo = !EstaAgachado && Input.GetKey(KeyCode.LeftShift) && seMueve;
@@ -58,22 +72,20 @@ public class PlayerController : MonoBehaviour
 
         float velocidadActual = EstaAgachado ? velocidadAgachado : (corriendo ? velocidadCorriendo : velocidad);
 
-        // Animaciones: le pasamos al Animator la velocidad real (0 si está quieto)
+        // Animaciones
         if (animator != null)
         {
             float velocidadAnim = seMueve ? velocidadActual : 0f;
-            animator.SetFloat(parametroVelocidad, velocidadAnim, 0.1f, Time.deltaTime); // el 0.1f suaviza la transición
+            animator.SetFloat(parametroVelocidad, velocidadAnim, 0.1f, Time.deltaTime);
             animator.SetBool(parametroAgachado, EstaAgachado);
 
-            // Multiplicador de velocidad de la animación: a 1 el ciclo avanza normal
             if (!string.IsNullOrEmpty(parametroMotionSpeed))
             {
                 animator.SetFloat(parametroMotionSpeed, 1f);
             }
         }
 
-        // Escalamos SOLO el modelo visual (no el CharacterController, que se queda siempre igual para evitar bugs de colisión).
-        // El collider de colisión no cambia de tamaño; solo cambia cómo se ve el personaje y cuánto detectan los enemigos.
+        // Escalar modelo visual al agacharse
         if (modeloVisual != null)
         {
             float escalaObjetivoY = EstaAgachado ? escalaAlturaAgachado : 1f;
@@ -81,9 +93,6 @@ public class PlayerController : MonoBehaviour
             escalaActual.y = Mathf.Lerp(escalaActual.y, escalaObjetivoY, velocidadTransicionAltura * Time.deltaTime);
             modeloVisual.localScale = escalaActual;
 
-            // Unity escala la malla desde su centro, así que al encoger en Y el modelo
-            // "flota" (los pies se despegan del suelo). Lo compensamos bajando el modelo
-            // la mitad de lo que se ha encogido, para que los pies sigan tocando el suelo.
             Vector3 posicionActual = modeloVisual.localPosition;
             posicionActual.y = (escalaActual.y - 1f) * (alturaOriginalModelo / 2f);
             modeloVisual.localPosition = posicionActual;
@@ -93,7 +102,6 @@ public class PlayerController : MonoBehaviour
 
         if (direccion.magnitude >= 0.1f)
         {
-            // Rotar al jugador hacia la dirección de movimiento
             float anguloObjetivo = Mathf.Atan2(direccion.x, direccion.z) * Mathf.Rad2Deg;
             float anguloSuavizado = Mathf.LerpAngle(
                 transform.eulerAngles.y,
@@ -106,21 +114,59 @@ public class PlayerController : MonoBehaviour
             controller.Move(movimiento);
         }
 
-        // Gravedad simple para que el CharacterController se mantenga pegado al suelo
+        // Gravedad
         if (controller.isGrounded && velocidadVertical.y < 0)
         {
             velocidadVertical.y = -2f;
         }
         velocidadVertical.y += gravedad * Time.deltaTime;
         controller.Move(velocidadVertical * Time.deltaTime);
+
+        // Control automático de sonido de pasos por temporizador
+        if (!usarEventosDeAnimacion && controller.isGrounded && seMueve)
+        {
+            float intervaloActual = EstaAgachado ? intervaloPasosAgachado : (corriendo ? intervaloPasosCorrer : intervaloPasosCaminar);
+            temporizadorPasos += Time.deltaTime;
+
+            if (temporizadorPasos >= intervaloActual)
+            {
+                temporizadorPasos = 0f;
+                ReproducirPasoAleatorio();
+            }
+        }
+        else if (!seMueve)
+        {
+            temporizadorPasos = 0f;
+        }
     }
 
-    // Red de seguridad: si la ventana pierde el foco, evitamos que algún estado se quede "pillado"
     private void OnApplicationFocus(bool tieneFoco)
     {
         if (!tieneFoco && emisorRuido != null)
         {
             emisorRuido.EstaCorriendo = false;
+        }
+    }
+
+    // Selecciona y reproduce uno de los sonidos de pasos al azar
+    public void ReproducirPasoAleatorio()
+    {
+        if (audioSourcePasos == null || sonidosPasos == null || sonidosPasos.Length == 0) return;
+
+        // Escoge un clip al azar del array
+        AudioClip clip = sonidosPasos[Random.Range(0, sonidosPasos.Length)];
+
+        // Aplica una pequeña variación de tono para dar variedad de audio
+        audioSourcePasos.pitch = Random.Range(1f - variacionPitch, 1f + variacionPitch);
+        audioSourcePasos.PlayOneShot(clip, volumenPasos);
+    }
+
+    // Método listo para ser llamado desde Animation Events en el Animator / FBX
+    public void OnFootstep()
+    {
+        if (controller.isGrounded)
+        {
+            ReproducirPasoAleatorio();
         }
     }
 }
